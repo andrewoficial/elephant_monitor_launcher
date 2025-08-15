@@ -36,7 +36,7 @@ type
   end;
 
 const
-  LauncherVersion = '1.0.1';
+  LauncherVersion = '1.0.2';
   JavaInstaller = 'OpenJDK21U-jdk_x64_windows_hotspot_21.0.8_9.msi';
   LogDir = 'ElephantMonitor';
 
@@ -103,7 +103,7 @@ begin
     Button1.Left := 20;
     Button1.Width := 100;
 
-    Button2.Caption := 'Инициализировать';
+    Button2.Caption := 'Обновить';
     Button2.Top := 100;
     Button2.Left := 130;
     Button2.Width := 100;
@@ -111,7 +111,7 @@ begin
     Button3.Caption := 'Запустить установку Java';
     Button3.Top := 100;
     Button3.Left := 240;
-    Button3.Width := 150;
+    Button3.Width := 250;
     Button3.Enabled := False;
 
     Label2.Top := 150;
@@ -224,6 +224,8 @@ var
   Files: TStringList;
   I: Integer;
   AppPath, JarPath: string;
+  VersionList: TStringList;
+  Version, FileName: string;
 begin
   try
     AppPath := ExtractFilePath(Application.ExeName);
@@ -238,35 +240,43 @@ begin
     end;
 
     Files := TStringList.Create;
+    VersionList := TStringList.Create;
     try
       Files := FindAllFiles(AppPath, 'Elephant*.jar', False);
       LogError('Найдено JAR-файлов: ' + IntToStr(Files.Count));
+
+      // Создаём список пар "версия;имя файла"
+      for I := 0 to Files.Count - 1 do
+      begin
+        JarPath := Files[I];
+        if FileExists(JarPath) then
+        begin
+          Version := GetAppVersion(JarPath);
+          // Форматируем версию для корректной сортировки (добавляем ведущие нули)
+          Version := StringReplace(Version, '.', FormatSettings.DecimalSeparator, [rfReplaceAll]);
+          VersionList.Add(Version + ';' + ExtractFileName(JarPath));
+        end;
+      end;
+
+      // Сортируем версии в обратном порядке
+      VersionList.Sort;
+      //VersionList.SortOrder := soDescending;
+
       ComboBox1.Items.BeginUpdate;
       try
         ComboBox1.Items.Clear;
 
-        if Files.Count > 0 then
+        if VersionList.Count > 0 then
         begin
-          for I := 0 to Files.Count - 1 do
+          for I := 0 to VersionList.Count - 1 do
           begin
-            JarPath := ExtractFileName(Files[I]);
-            if FileExists(Files[I]) then
-              ComboBox1.Items.Add(JarPath);
+            FileName := Copy(VersionList[I], Pos(';', VersionList[I]) + 1, Length(VersionList[I]));
+            ComboBox1.Items.Add(FileName);
           end;
 
-          if ComboBox1.Items.Count > 0 then
-          begin
-            ComboBox1.ItemIndex := 0;
-            Button1.Enabled := True;
-            Label3.Caption := 'Версия: ' + GetAppVersion(Files[0]);
-          end
-          else
-          begin
-            ComboBox1.Items.Add('JAR-файлы не найдены!');
-            ComboBox1.ItemIndex := 0;
-            Button1.Enabled := False;
-            Label3.Caption := '';
-          end;
+          ComboBox1.ItemIndex := 0;
+          Button1.Enabled := True;
+          Label3.Caption := 'Версия: ' + GetAppVersion(ExtractFilePath(Application.ExeName) + ComboBox1.Items[0]);
         end
         else
         begin
@@ -280,6 +290,7 @@ begin
       end;
     finally
       Files.Free;
+      VersionList.Free;
     end;
   except
     on E: Exception do
